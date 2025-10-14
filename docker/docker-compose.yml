@@ -11,7 +11,7 @@ services:
       - ../tests/:/app/src/tests/
     command: uv run uvicorn filerskeepers.main:app --reload --host=0.0.0.0
     ports:
-      - "8400:8000"
+      - "8600:8000"
     environment:
       - FILERSKEEPERS_DEBUG=1
       - FILERSKEEPERS_MONGODB_URL=mongodb://filerskeepers:filerskeepers@filerskeepers-mongodb:27017/filerskeepers?authSource=admin
@@ -47,7 +47,7 @@ services:
       MONGO_INITDB_DATABASE: filerskeepers
     container_name: filerskeepers-mongodb
     ports:
-      - "27017:27017"
+      - "27617:27017"
     volumes:
       - filerskeepers-mongo-data:/data/db
       - filerskeepers-mongo-config:/data/configdb
@@ -56,7 +56,7 @@ services:
     image: redis:8.2-alpine
     container_name: filerskeepers-redis
     ports:
-    - "6399:6379"
+    - "6699:6379"
 
 
 volumes:

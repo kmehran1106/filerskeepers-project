@@ -1,7 +1,6 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import MongoDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +13,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["dev", "stage", "prod"] = "dev"
 
     # MongoDB settings
-    MONGODB_URL: MongoDsn = "mongodb://filerskeepers:filerskeepers@localhost:27017/filerskeepers?authSource=admin"
+    MONGODB_URL: str = "mongodb://filerskeepers:filerskeepers@localhost:27017/filerskeepers?authSource=admin"
     MONGODB_DATABASE: str = "filerskeepers"
 
     # Redis settings
