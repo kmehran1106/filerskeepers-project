@@ -1,20 +1,25 @@
 import asyncio
 import logging
 from collections.abc import AsyncGenerator, Generator
+from typing import Any
 
 import pytest
 import redis.asyncio as redis
 from arq.connections import ArqRedis, RedisSettings, create_pool
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from motor.motor_asyncio import AsyncIOMotorClient
 from testcontainers.mongodb import MongoDbContainer
 from testcontainers.redis import RedisContainer
 
-from filerskeepers.application.app import get_app
+from filerskeepers.application.rate_limiting import RateLimitMiddleware
 from filerskeepers.application.settings import Settings
+from filerskeepers.db.mongo import init_mongo
 from filerskeepers.db.redis import get_redis_connection, get_redis_pool
 from filerskeepers.queue.arq import get_arq_redis
 from filerskeepers.queue.base import TaskContext, WorkerContext
+from filerskeepers.web.auth import auth_router
+from filerskeepers.web.ping import ping_router
 
 
 # Suppress noisy logs during tests
@@ -77,7 +82,7 @@ async def redis_pool(
     await pool.aclose()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def arq_redis(
     redis_container: dict[str, str],
 ) -> AsyncGenerator[ArqRedis]:
@@ -91,8 +96,8 @@ async def arq_redis(
     await arq_pool.aclose()
 
 
-@pytest.fixture
-async def test_settings(
+@pytest.fixture(scope="session")
+def test_settings(
     mongodb_container: dict[str, str], redis_container: dict[str, str]
 ) -> Settings:
     return Settings(
@@ -104,9 +109,32 @@ async def test_settings(
     )
 
 
+@pytest.fixture(scope="session")
+async def mongo_client(
+    test_settings: Settings,
+) -> AsyncGenerator[AsyncIOMotorClient[Any]]:
+    client = await init_mongo(test_settings)
+    yield client
+    client.close()
+
+
 @pytest.fixture
 def fastapi_app() -> FastAPI:
-    return get_app()
+    # Create app without lifespan
+    app = FastAPI(
+        title="FilersKeepers API",
+        description="API for monitoring and serving e-commerce product data",
+        version="0.1.0",
+    )
+
+    # Add middleware (will get Redis client from app.state during requests)
+    app.add_middleware(RateLimitMiddleware)
+
+    # Register routers
+    app.include_router(auth_router, prefix="/auth/v1", tags=["Auth"])
+    app.include_router(ping_router, prefix="/ping/v1", tags=["Ping"])
+
+    return app
 
 
 @pytest.fixture
@@ -114,15 +142,21 @@ async def override_dependencies(
     test_settings: Settings,
     redis_pool: redis.ConnectionPool,
     arq_redis: ArqRedis,
+    mongo_client: AsyncIOMotorClient[Any],
     fastapi_app: FastAPI,
 ) -> AsyncGenerator[None]:
-    # Apply overrides
+    # Set up app state for middleware and dependencies
+    fastapi_app.state.redis_pool = redis_pool
+    fastapi_app.state.redis_client = get_redis_connection(redis_pool)
+    fastapi_app.state.mongo_client = mongo_client
+
+    # Apply dependency overrides
     fastapi_app.dependency_overrides[get_redis_pool] = lambda: redis_pool
     fastapi_app.dependency_overrides[get_arq_redis] = lambda: arq_redis
 
     yield
 
-    # Clear overrides
+    # Clear overrides and state
     fastapi_app.dependency_overrides.pop(get_redis_pool, None)
     fastapi_app.dependency_overrides.pop(get_arq_redis, None)
     fastapi_app.dependency_overrides.clear()
@@ -166,9 +200,16 @@ async def task_context(
 
 @pytest.fixture
 async def cleanup(
-
+    mongo_client: AsyncIOMotorClient[Any],
+    test_settings: Settings,
 ) -> AsyncGenerator[None]:
-    try:
-        yield
-    finally:
-        pass
+    # Clean up before test (in case previous test failed)
+    db = mongo_client[test_settings.MONGODB_DATABASE]
+    for collection_name in await db.list_collection_names():
+        await db[collection_name].delete_many({})
+
+    yield
+
+    # Clean up after test
+    for collection_name in await db.list_collection_names():
+        await db[collection_name].delete_many({})

@@ -13,12 +13,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        redis_client: redis.Redis,
         rate_limit: int = settings.RATE_LIMIT_PER_HOUR,
     ) -> None:
         super().__init__(app)
         self.rate_limit = rate_limit
-        self.redis = redis_client
         self.window = 3600  # 1 hour in seconds
 
     async def dispatch(
@@ -29,11 +27,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not api_key:
             return await call_next(request)
 
+        # Get Redis client from app state (set during lifespan)
+        redis_client: redis.Redis = request.app.state.redis_client
+
         key = f"rate_limit:{api_key}"
         current_time = int(time())
         window_start = current_time - self.window
 
-        async with self.redis.pipeline() as pipe:
+        async with redis_client.pipeline() as pipe:
             await pipe.zremrangebyscore(key, 0, window_start)
             await pipe.zcard(key)
             await pipe.zadd(key, {str(current_time): current_time})

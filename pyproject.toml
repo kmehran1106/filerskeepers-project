@@ -6,14 +6,17 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "arq>=0.26.3",
+    "bcrypt>=4.2.1",
     "beanie>=2.0.0",
     "beautifulsoup4>=4.14.2",
+    "email-validator>=2.2.0",
     "fastapi>=0.119.0",
     "gunicorn>=23.0.0",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "lxml>=6.0.2",
     "motor>=3.7.1",
+    "passlib>=1.7.4",
     "pydantic>=2.12.1",
     "pydantic-settings>=2.11.0",
     "python-dotenv>=1.1.1",
@@ -118,5 +121,6 @@ ban-relative-imports = "all"
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
-    "ignore::DeprecationWarning:testcontainers.*"
+    "ignore::DeprecationWarning:testcontainers.*",
+    "ignore::pydantic.warnings.PydanticDeprecatedSince211"
 ]

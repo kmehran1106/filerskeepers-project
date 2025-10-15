@@ -4,6 +4,7 @@ from filerskeepers.ping.dtos import PingResponse
 from filerskeepers.ping.services import PingService
 from tests.base import TestBase
 
+
 class TestPingService(TestBase):
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
