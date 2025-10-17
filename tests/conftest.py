@@ -12,14 +12,18 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from testcontainers.mongodb import MongoDbContainer
 from testcontainers.redis import RedisContainer
 
-from filerskeepers.application.rate_limiting import RateLimitMiddleware
+from filerskeepers.application.app import get_app
 from filerskeepers.application.settings import Settings
+from filerskeepers.auth.repositories import UserRepository
+from filerskeepers.auth.services import AuthService
+from filerskeepers.books.repositories import BookRepository, ChangeLogRepository
+from filerskeepers.books.services import BookService
+from filerskeepers.crawler.repositories import CrawlMetadataRepository
+from filerskeepers.crawler.services import CrawlerService
 from filerskeepers.db.mongo import init_mongo
 from filerskeepers.db.redis import get_redis_connection, get_redis_pool
 from filerskeepers.queue.arq import get_arq_redis
 from filerskeepers.queue.base import TaskContext, WorkerContext
-from filerskeepers.web.auth import auth_router
-from filerskeepers.web.ping import ping_router
 
 
 # Suppress noisy logs during tests
@@ -120,21 +124,7 @@ async def mongo_client(
 
 @pytest.fixture
 def fastapi_app() -> FastAPI:
-    # Create app without lifespan
-    app = FastAPI(
-        title="FilersKeepers API",
-        description="API for monitoring and serving e-commerce product data",
-        version="0.1.0",
-    )
-
-    # Add middleware (will get Redis client from app.state during requests)
-    app.add_middleware(RateLimitMiddleware)
-
-    # Register routers
-    app.include_router(auth_router, prefix="/auth/v1", tags=["Auth"])
-    app.include_router(ping_router, prefix="/ping/v1", tags=["Ping"])
-
-    return app
+    return get_app(use_lifespan=False)
 
 
 @pytest.fixture
@@ -199,17 +189,56 @@ async def task_context(
 
 
 @pytest.fixture
+def user_repository() -> UserRepository:
+    return UserRepository()
+
+
+@pytest.fixture
+def book_repository() -> BookRepository:
+    return BookRepository()
+
+
+@pytest.fixture
+def change_log_repository() -> ChangeLogRepository:
+    return ChangeLogRepository()
+
+
+@pytest.fixture
+def crawl_metadata_repository() -> CrawlMetadataRepository:
+    return CrawlMetadataRepository()
+
+
+@pytest.fixture
+def auth_service(user_repository: UserRepository) -> AuthService:
+    return AuthService(user_repository=user_repository)
+
+
+@pytest.fixture
+def crawler_service() -> CrawlerService:
+    return CrawlerService()
+
+
+@pytest.fixture
+def book_service(
+    book_repository: BookRepository,
+    change_log_repository: ChangeLogRepository,
+) -> BookService:
+    return BookService(
+        book_repo=book_repository,
+        change_log_repo=change_log_repository,
+    )
+
+
+@pytest.fixture
 async def cleanup(
     mongo_client: AsyncIOMotorClient[Any],
     test_settings: Settings,
 ) -> AsyncGenerator[None]:
-    # Clean up before test (in case previous test failed)
     db = mongo_client[test_settings.MONGODB_DATABASE]
     for collection_name in await db.list_collection_names():
         await db[collection_name].delete_many({})
 
     yield
 
-    # Clean up after test
     for collection_name in await db.list_collection_names():
         await db[collection_name].delete_many({})

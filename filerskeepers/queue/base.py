@@ -6,6 +6,10 @@ from arq import ArqRedis
 from loguru import logger
 
 from filerskeepers.application.settings import Settings, settings
+from filerskeepers.books.repositories import BookRepository, ChangeLogRepository
+from filerskeepers.books.services import BookService
+from filerskeepers.crawler.repositories import CrawlMetadataRepository
+from filerskeepers.crawler.services import CrawlerService
 
 
 WorkerContext = dict[str, Any]
@@ -29,8 +33,17 @@ class TaskContext:
             self.redis_pool = self._worker_ctx["redis_pool"]
             assert self.redis_pool is not None, "Failed to initialize redis pool"
 
-            return self
+            self.book_repo = BookRepository()
+            self.change_log_repo = ChangeLogRepository()
+            self.crawl_metadata_repo = CrawlMetadataRepository()
 
+            self.crawler_service = CrawlerService()
+            self.book_service = BookService(
+                book_repo=self.book_repo,
+                change_log_repo=self.change_log_repo,
+            )
+
+            return self
         except Exception as e:
             logger.error(f"Failed to initialize task context: {str(e)}")
             raise
