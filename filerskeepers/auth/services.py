@@ -44,12 +44,7 @@ class AuthService:
 
         logger.info(f"User registered successfully: {user.email}")
 
-        return UserResponse(
-            id=str(user.id),
-            email=user.email,
-            api_key=user.api_key,
-            created_at=user.created_at,
-        )
+        return UserResponse.from_object(user)
 
     async def login(self, request: LoginRequest) -> LoginResponse:
         # Find user by email
@@ -72,13 +67,7 @@ class AuthService:
         logger.info(f"User logged in successfully: {user.email}")
 
         return LoginResponse(
-            user=UserResponse(
-                id=str(user.id),
-                email=user.email,
-                api_key=user.api_key,
-                created_at=user.created_at,
-            ),
-            message="Login successful",
+            user=UserResponse.from_object(user), message="Login successful"
         )
 
     async def verify_api_key(self, api_key: str) -> User | None:

@@ -5,6 +5,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from filerskeepers.application.settings import Settings
 from filerskeepers.auth.models import User
+from filerskeepers.books.models import Book, ChangeLog
+from filerskeepers.crawler.models import CrawlMetadata
 
 
 async def init_mongo(settings: Settings) -> AsyncIOMotorClient[Any]:
@@ -15,7 +17,7 @@ async def init_mongo(settings: Settings) -> AsyncIOMotorClient[Any]:
     # After this, User.find(), User.insert(), etc. work directly
     await init_beanie(
         database=database,  # type: ignore[arg-type]
-        document_models=[User],
+        document_models=[User, Book, ChangeLog, CrawlMetadata],
     )
 
     return client

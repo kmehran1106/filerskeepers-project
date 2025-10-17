@@ -12,6 +12,7 @@ from filerskeepers.application.settings import settings
 from filerskeepers.db.mongo import init_mongo
 from filerskeepers.db.redis import get_redis_connection, get_redis_pool
 from filerskeepers.web.auth import auth_router
+from filerskeepers.web.books.api import books_router
 from filerskeepers.web.ping import ping_router
 
 
@@ -44,12 +45,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     logger.info("Application shut down complete")
 
 
-def get_app() -> FastAPI:
+def get_app(use_lifespan: bool = True) -> FastAPI:
     app = FastAPI(
         title="FilersKeepers API",
         description="API for monitoring and serving e-commerce product data",
         version="0.1.0",
-        lifespan=lifespan,
+        lifespan=lifespan if use_lifespan else None,
     )
 
     # Add middleware (will get Redis client from app.state during requests)
@@ -58,5 +59,6 @@ def get_app() -> FastAPI:
     # Register routers
     app.include_router(auth_router, prefix="/auth/v1", tags=["Auth"])
     app.include_router(ping_router, prefix="/ping/v1", tags=["Ping"])
+    app.include_router(books_router, prefix="/books/v1", tags=["Books"])
 
     return app
