@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from filerskeepers.auth.dependencies import get_current_user
 from filerskeepers.auth.models import User
@@ -73,6 +74,50 @@ async def get_book(
             detail=f"Book with ID {book_id} not found",
         )
     return book
+
+
+@books_router.get(
+    "/changes/report",
+    status_code=status.HTTP_200_OK,
+    summary="Generate change report",
+    description=(
+        "Generate a downloadable change report in JSON or CSV format for a "
+        "specific date range (default: last 24 hours)"
+    ),
+)
+async def generate_change_report(
+    book_service: Annotated[BookService, Depends(get_book_service)],
+    format_type: Annotated[
+        Literal["json", "csv"], Query(alias="format", description="Report format")
+    ] = "json",
+    start_date: Annotated[
+        datetime | None,
+        Query(description="Start date (ISO format, default: 24 hours ago)"),
+    ] = None,
+    end_date: Annotated[
+        datetime | None, Query(description="End date (ISO format, default: now)")
+    ] = None,
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    report_content = await book_service.generate_change_report(
+        start_date=start_date,
+        end_date=end_date,
+        format_type=format_type,
+    )
+
+    # Set appropriate content type and filename
+    if format_type == "json":
+        media_type = "application/json"
+        filename = f"change_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    else:
+        media_type = "text/csv"
+        filename = f"change_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    return Response(
+        content=report_content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @books_router.get(

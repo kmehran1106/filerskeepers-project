@@ -1,3 +1,7 @@
+import csv
+import json
+from datetime import UTC, datetime, timedelta
+from io import StringIO
 from typing import Literal
 
 from loguru import logger
@@ -8,7 +12,7 @@ from filerskeepers.books.dtos import (
     ChangeLogListResponse,
     ChangeLogResponse,
 )
-from filerskeepers.books.models import Book
+from filerskeepers.books.models import Book, ChangeLog
 from filerskeepers.books.repositories import BookRepository, ChangeLogRepository
 from filerskeepers.crawler.dtos import CrawledBookDto
 
@@ -199,3 +203,113 @@ class BookService:
             page_size=page_size,
             total_pages=total_pages,
         )
+
+    async def generate_change_report(
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        format_type: Literal["json", "csv"] = "json",
+    ) -> str:
+        """
+        Generate a change report for a specific date range.
+
+        Args:
+            start_date: Start of the date range (default: 24 hours ago)
+            end_date: End of the date range (default: now)
+            format_type: Output format - 'json' or 'csv'
+
+        Returns:
+            String content of the report in the specified format
+        """
+        # Set default date range if not provided
+        if end_date is None:
+            end_date = datetime.now(UTC)
+        if start_date is None:
+            start_date = end_date - timedelta(days=1)
+
+        # Fetch all changes in the date range
+        changes = await self._get_changes_in_range(start_date, end_date)
+
+        logger.info(
+            f"Generating {format_type.upper()} report with {len(changes)} changes "
+            f"from {start_date} to {end_date}"
+        )
+
+        if format_type == "json":
+            return self._generate_json_report(changes, start_date, end_date)
+        else:
+            return self._generate_csv_report(changes)
+
+    async def _get_changes_in_range(
+        self, start_date: datetime, end_date: datetime
+    ) -> list[ChangeLog]:
+        """Fetch all changes within the specified date range."""
+        query = ChangeLog.find(
+            ChangeLog.timestamp >= start_date, ChangeLog.timestamp <= end_date
+        )
+        query = query.sort("-timestamp")
+        return await query.to_list()
+
+    def _generate_json_report(
+        self, changes: list[ChangeLog], start_date: datetime, end_date: datetime
+    ) -> str:
+        """Generate a JSON report from change logs."""
+        report_data = {
+            "report_metadata": {
+                "generated_at": datetime.now(UTC).isoformat(),
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "total_changes": len(changes),
+            },
+            "changes": [
+                {
+                    "id": str(change.id),
+                    "book_id": change.book_id,
+                    "book_name": change.book_name,
+                    "change_type": change.change_type,
+                    "field_changed": change.field_changed,
+                    "old_value": change.old_value,
+                    "new_value": change.new_value,
+                    "timestamp": change.timestamp.isoformat(),
+                }
+                for change in changes
+            ],
+        }
+
+        return json.dumps(report_data, indent=2)
+
+    def _generate_csv_report(self, changes: list[ChangeLog]) -> str:
+        """Generate a CSV report from change logs."""
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow(
+            [
+                "ID",
+                "Book ID",
+                "Book Name",
+                "Change Type",
+                "Field Changed",
+                "Old Value",
+                "New Value",
+                "Timestamp",
+            ]
+        )
+
+        # Write data rows
+        for change in changes:
+            writer.writerow(
+                [
+                    str(change.id),
+                    change.book_id,
+                    change.book_name,
+                    change.change_type,
+                    change.field_changed or "",
+                    change.old_value or "",
+                    change.new_value or "",
+                    change.timestamp.isoformat(),
+                ]
+            )
+
+        return output.getvalue()
