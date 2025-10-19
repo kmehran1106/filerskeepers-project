@@ -50,6 +50,7 @@ class ChangeLog(Document):
     new_value: str | None = None
     field_changed: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    crawl_id: str | None = None
 
     class Settings:
         name = "change_logs"

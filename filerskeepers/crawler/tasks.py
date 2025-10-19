@@ -36,7 +36,7 @@ async def crawl_books_task(ctx: WorkerContext) -> dict[str, Any]:
 
             # Use crawler service to fetch books (generator with resumable support)
             async for book_dto, page_num in task_ctx.crawler_service.crawl_all_books(
-                start_page
+                start_page, crawl_id=str(metadata.id)
             ):
                 books_found += 1
                 try:

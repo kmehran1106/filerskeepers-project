@@ -77,6 +77,7 @@ class ChangeLogRepository:
         old_value: str | None = None,
         new_value: str | None = None,
         field_changed: str | None = None,
+        crawl_id: str | None = None,
     ) -> ChangeLog:
         change_log = ChangeLog(
             book_id=book_id,
@@ -85,6 +86,7 @@ class ChangeLogRepository:
             old_value=old_value,
             new_value=new_value,
             field_changed=field_changed,
+            crawl_id=crawl_id,
         )
         await change_log.insert()
         return change_log

@@ -20,7 +20,7 @@ class CrawlerService:
         self.retry_delay = settings.CRAWLER_RETRY_DELAY
 
     async def crawl_all_books(
-        self, start_page: int = 1
+        self, start_page: int = 1, crawl_id: str | None = None
     ) -> AsyncGenerator[tuple[CrawledBookDto, int]]:
         logger.info(f"Starting crawl from page {start_page}")
         page = start_page
@@ -44,7 +44,7 @@ class CrawlerService:
                 logger.info(f"Found {len(book_urls)} books on page {page}")
 
                 # Crawl books from this page and yield them with page number
-                async for book_dto in self._crawl_books_batch(book_urls):
+                async for book_dto in self._crawl_books_batch(book_urls, crawl_id):
                     yield book_dto, page
 
                 # Check if there's a next page
@@ -60,7 +60,9 @@ class CrawlerService:
 
         logger.info(f"Crawl completed at page {page}")
 
-    async def crawl_book(self, url: str) -> CrawledBookDto | None:
+    async def crawl_book(
+        self, url: str, crawl_id: str | None = None
+    ) -> CrawledBookDto | None:
         try:
             html = await self._fetch_with_retry(url)
             if not html:
@@ -72,13 +74,13 @@ class CrawlerService:
                 logger.warning(f"Failed to parse book page: {url}")
                 return None
 
-            return CrawledBookDto(**book_data)
+            return CrawledBookDto(**book_data, crawl_id=crawl_id)
         except Exception as e:
             logger.error(f"Error crawling book {url}: {e}")
             return None
 
     async def _crawl_books_batch(
-        self, urls: list[str]
+        self, urls: list[str], crawl_id: str | None = None
     ) -> AsyncGenerator[CrawledBookDto]:
         batch_size = 10  # Process 10 books concurrently
 
@@ -88,7 +90,7 @@ class CrawlerService:
             logger.info(f"Processing batch {i // batch_size + 1}/{total_batches}")
 
             # Crawl books in this batch concurrently
-            tasks = [self.crawl_book(url) for url in batch]
+            tasks = [self.crawl_book(url, crawl_id) for url in batch]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Process results and yield successful ones

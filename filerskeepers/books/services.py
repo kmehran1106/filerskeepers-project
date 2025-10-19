@@ -37,10 +37,12 @@ class BookService:
                 # Book exists - check for changes
                 if existing_book.content_hash != book_dto.content_hash:
                     # Content has changed
-                    await self._detect_and_log_changes(existing_book, book_dto)
+                    await self._detect_and_log_changes(
+                        existing_book, book_dto, book_dto.crawl_id
+                    )
 
                     # Update the book
-                    book_dict = book_dto.model_dump()
+                    book_dict = book_dto.model_dump(exclude={"crawl_id"})
                     for key, value in book_dict.items():
                         if key not in ["html_snapshot"]:  # Keep old snapshot
                             setattr(existing_book, key, value)
@@ -54,7 +56,7 @@ class BookService:
 
             else:
                 # New book - create it
-                book = Book(**book_dto.model_dump())
+                book = Book(**book_dto.model_dump(exclude={"crawl_id"}))
                 await self.book_repo.create(book)
 
                 # Log as new book
@@ -63,6 +65,7 @@ class BookService:
                     book_name=book.name,
                     change_type="new_book",
                     new_value=book.name,
+                    crawl_id=book_dto.crawl_id,
                 )
                 logger.info(f"Created new book: {book_dto.name}")
                 return {"status": "created", "book_id": str(book.id)}
@@ -72,7 +75,7 @@ class BookService:
             return {"status": "error", "error": str(e)}
 
     async def _detect_and_log_changes(
-        self, existing_book: Book, new_data: CrawledBookDto
+        self, existing_book: Book, new_data: CrawledBookDto, crawl_id: str | None
     ) -> None:
         book_id = str(existing_book.id)
         book_name = existing_book.name
@@ -86,6 +89,7 @@ class BookService:
                 old_value=f"£{existing_book.price_incl_tax:.2f}",
                 new_value=f"£{new_data.price_incl_tax:.2f}",
                 field_changed="price_incl_tax",
+                crawl_id=crawl_id,
             )
             logger.info(
                 f"Price changed for {book_name}: "
@@ -101,6 +105,7 @@ class BookService:
                 old_value=f"£{existing_book.price_excl_tax:.2f}",
                 new_value=f"£{new_data.price_excl_tax:.2f}",
                 field_changed="price_excl_tax",
+                crawl_id=crawl_id,
             )
 
         # Check availability changes
@@ -112,6 +117,7 @@ class BookService:
                 old_value=existing_book.availability,
                 new_value=new_data.availability,
                 field_changed="availability",
+                crawl_id=crawl_id,
             )
             logger.info(
                 f"Availability changed for {book_name}: "
@@ -127,6 +133,7 @@ class BookService:
                 old_value=str(existing_book.rating),
                 new_value=str(new_data.rating),
                 field_changed="rating",
+                crawl_id=crawl_id,
             )
 
         if existing_book.num_reviews != new_data.num_reviews:
@@ -137,6 +144,7 @@ class BookService:
                 old_value=str(existing_book.num_reviews),
                 new_value=str(new_data.num_reviews),
                 field_changed="num_reviews",
+                crawl_id=crawl_id,
             )
 
     async def get_book(self, book_id: str) -> BookResponse | None:

@@ -16,3 +16,4 @@ class CrawledBookDto(BaseModel):
     source_url: str = Field(..., description="Original URL of the book page")
     html_snapshot: str = Field(default="", description="Raw HTML snapshot")
     content_hash: str = Field(..., description="Hash of important content fields")
+    crawl_id: str | None = Field(default=None, description="Crawl session identifier")
