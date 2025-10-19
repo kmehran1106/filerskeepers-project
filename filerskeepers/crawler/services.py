@@ -73,7 +73,6 @@ class CrawlerService:
                 return None
 
             return CrawledBookDto(**book_data)
-
         except Exception as e:
             logger.error(f"Error crawling book {url}: {e}")
             return None
@@ -103,7 +102,7 @@ class CrawlerService:
                     logger.warning(f"Failed to crawl {url}")
 
             # Small delay between batches to be nice to the server
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
 
     async def _fetch_with_retry(self, url: str) -> str | None:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
