@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["filerskeepers*"]
-exclude = ["tests*", "docker*", "local*"]
+exclude = ["tests*", "docker*", "local*", "screenshots*"]
 
 [project]
 name = "filerskeepers-project"
