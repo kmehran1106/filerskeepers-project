@@ -26,3 +26,15 @@ class CrawlMetadata(Document):
     class Settings:
         name = "crawl_metadata"
         use_state_management = True
+
+
+class FailedParse(Document):
+    crawl_id: str | None = None
+    url: str
+    html: str | None = None  # None when fetch failed, populated when parse failed
+    failure_reason: str  # Description of why it failed
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    class Settings:
+        name = "failed_parses"
+        use_state_management = True

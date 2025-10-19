@@ -6,18 +6,23 @@ from loguru import logger
 
 from filerskeepers.application.settings import settings
 from filerskeepers.crawler.dtos import CrawledBookDto
+from filerskeepers.crawler.models import FailedParse
 from filerskeepers.crawler.parser import BookParser
+from filerskeepers.crawler.repositories import FailedParseRepository
 
 
 class CrawlerService:
     BASE_URL = "https://books.toscrape.com"
     CATALOG_URL = f"{BASE_URL}/catalogue/page-{{page}}.html"
 
-    def __init__(self) -> None:
+    def __init__(
+        self, failed_parse_repo: FailedParseRepository = FailedParseRepository()
+    ) -> None:
         self.parser = BookParser()
         self.timeout = settings.CRAWLER_TIMEOUT
         self.max_retries = settings.CRAWLER_MAX_RETRIES
         self.retry_delay = settings.CRAWLER_RETRY_DELAY
+        self.failed_parse_repo = failed_parse_repo
 
     async def crawl_all_books(
         self, start_page: int = 1, crawl_id: str | None = None
@@ -67,11 +72,27 @@ class CrawlerService:
             html = await self._fetch_with_retry(url)
             if not html:
                 logger.warning(f"Failed to fetch book page: {url}")
+                # Store failed fetch attempt
+                failed_parse = FailedParse(
+                    crawl_id=crawl_id,
+                    url=url,
+                    html=None,
+                    failure_reason="Failed to fetch HTML from server",
+                )
+                await self.failed_parse_repo.create(failed_parse)
                 return None
 
             book_data = self.parser.parse_book_page(html, url)
             if not book_data:
                 logger.warning(f"Failed to parse book page: {url}")
+                # Store failed parse attempt with HTML
+                failed_parse = FailedParse(
+                    crawl_id=crawl_id,
+                    url=url,
+                    html=html,
+                    failure_reason="Failed to parse book data from HTML",
+                )
+                await self.failed_parse_repo.create(failed_parse)
                 return None
 
             return CrawledBookDto(**book_data, crawl_id=crawl_id)

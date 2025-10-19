@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from filerskeepers.crawler.models import CrawlMetadata, CrawlStatus
+from filerskeepers.crawler.models import CrawlMetadata, CrawlStatus, FailedParse
 
 
 class CrawlMetadataRepository:
@@ -28,3 +28,9 @@ class CrawlMetadataRepository:
             .sort("-timestamp")
             .first_or_none()
         )
+
+
+class FailedParseRepository:
+    async def create(self, failed_parse: FailedParse) -> FailedParse:
+        await failed_parse.insert()
+        return failed_parse
