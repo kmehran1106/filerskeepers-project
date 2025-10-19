@@ -1,6 +1,10 @@
+from time import time
+
 import pytest
+import redis.asyncio as redis
 from httpx import AsyncClient
 
+from filerskeepers.application.settings import settings
 from filerskeepers.auth.models import User
 from filerskeepers.auth.repositories import UserRepository
 from filerskeepers.books.models import Book
@@ -14,10 +18,12 @@ class TestBooksAPI(TestBase):
         self,
         user_repository: UserRepository,
         book_repository: BookRepository,
+        redis_connection: redis.Redis,
         cleanup: None,
     ) -> None:
         self.user_repo = user_repository
         self.book_repo = book_repository
+        self.redis = redis_connection
 
         # Create a test user and get API key
         hashed_password = User.hash_password("testpassword")
@@ -72,3 +78,32 @@ class TestBooksAPI(TestBase):
         assert len(data["books"]) == 1
         assert data["books"][0]["name"] == "Test Book"
         assert data["page"] == 1
+
+    @pytest.mark.anyio
+    async def test_rate_limiting_exceeded(self, client: AsyncClient) -> None:
+        # Given - Pre-populate Redis with rate limit data to exceed the limit
+        rate_limit_key = f"rate_limit:{self.api_key}"
+        current_time = int(time())
+
+        # Add exactly rate_limit number of requests to Redis
+        # This simulates that the user has already made the maximum allowed requests
+        request_data = {
+            str(current_time - i): current_time - i
+            for i in range(settings.RATE_LIMIT_PER_HOUR)
+        }
+        await self.redis.zadd(rate_limit_key, request_data)
+        await self.redis.expire(rate_limit_key, 3600)
+
+        # When - Try to make another request
+        response = await client.get(
+            "/books/v1",
+            headers={"X-API-Key": self.api_key},
+        )
+
+        # Then - Should get rate limit error
+        assert response.status_code == 429
+        detail = response.json()["detail"]
+        assert (
+            detail
+            == f"Rate limit exceeded: {settings.RATE_LIMIT_PER_HOUR} requests/hour"
+        )

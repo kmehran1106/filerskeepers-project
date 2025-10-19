@@ -2,7 +2,8 @@ from collections.abc import Awaitable, Callable
 from time import time
 
 import redis.asyncio as redis
-from fastapi import HTTPException, Request, Response, status
+from fastapi import Request, Response, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -44,9 +45,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         request_count = results[1]
 
         if request_count >= self.rate_limit:
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded: {self.rate_limit} requests/hour",
+                content={
+                    "detail": f"Rate limit exceeded: {self.rate_limit} requests/hour"
+                },
             )
 
         return await call_next(request)
